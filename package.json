@@ -1,0 +1,32 @@
+{
+  "name": "galactus-db-node-driver",
+  "version": "0.1.0",
+  "description": "Dependency-free native Bolt 4.4 driver for Galactus DB",
+  "type": "module",
+  "exports": {
+    "types": "./index.d.ts",
+    "import": "./index.js",
+    "default": "./index.js"
+  },
+  "types": "./index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "docs"
+  ],
+  "homepage": "https://galactusdb.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/galactusdb/galactus-db-node-driver.git"
+  },
+  "bugs": {
+    "url": "https://github.com/galactusdb/galactus-db-node-driver/issues"
+  }
+}
