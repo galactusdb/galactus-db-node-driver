@@ -290,7 +290,7 @@ export class DatabaseError extends Error {
 }
 export class Driver {
   static async connect(
-      uri, {username, password, database = 'neo4j', timeout = 30000} = {}) {
+      uri, {username, password, database = '', timeout = 30000} = {}) {
     const u = new URL(uri);
     if (!['bolt:', 'bolt+s:'].includes(u.protocol) || !u.hostname ||
         u.username || u.password || !['', '/'].includes(u.pathname) ||
@@ -373,6 +373,10 @@ export class Driver {
                           this.socket.write(b, e => e ? reject(e) : resolve()));
   }
   async _send(tag, ...fields) {
+    if (tag === 0x10 || tag === 0x11) {
+      const extra = fields[tag === 0x10 ? 2 : 0];
+      if (!extra.db) delete extra.db;
+    }
     const b = encode(new Structure(tag, fields));
     if (b.length > MAX)
       throw new Error('Message exceeds 64 MiB');
