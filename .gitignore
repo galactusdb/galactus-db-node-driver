@@ -13,3 +13,14 @@ node_modules/
 *.suo
 .vs/
 .DS_Store
+
+# Node / JavaScript / TypeScript
+coverage/
+.nyc_output/
+.cache/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+# npm/yarn/pnpm lockfiles remain trackable.
