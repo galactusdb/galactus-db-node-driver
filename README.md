@@ -3,13 +3,14 @@
 [Galactus DB](https://galactusdb.com) · [Driver catalogue](https://galactusdb.com/product/drivers) · [Type mapping](docs/BLUEPRINT.md) · [Spatial guide](docs/SPATIAL.md) · [Issues](https://github.com/galactusdb/galactus-db-node-driver/issues)
 
 Connect Node / TypeScript applications to Galactus DB with parameterised Cypher,
-native values, and explicit transactions. The driver speaks Bolt 4.4 directly
-and has **zero third-party runtime package dependencies**.
+native values, and explicit transactions. The driver speaks Bolt 5.4 directly,
+falls back to Bolt 4.4 when the server asks for it, connects over the server's
+own TLS listener, and has **zero third-party runtime package dependencies**.
 
-**Status: 0.1 / early access.** Source is available on `main`. This is a working,
-tested baseline with one connection per driver and eager results. Package-registry
-releases, pooling and cancellation are not available yet. Use source installs
-below and evaluate the [current scope](#current-scope) for your application.
+**Status: 0.2 / early access.** Source is available on `main`. This is a tested
+baseline with one connection per driver and eager results. Install from source
+as shown below and read the [current scope](#current-scope) to see how it fits
+your application.
 
 ## Contents
 
@@ -91,18 +92,56 @@ Adapt error handling to your application.
 
 ## Connection configuration
 
-`Driver.connect(uri, {username, password, database: "", timeout: 30000})`; timeout is milliseconds. Close with `driver.close()` in `finally`.
+`Driver.connect(uri, {username, password, database: "", timeout: 30000, trustedCertificates})`; timeout is milliseconds. Close with `driver.close()` in `finally`.
 
 | Setting | Behaviour |
 |---|---|
-| URI | Direct `bolt://host:port`; omitted port is 7687 |
+| URI | `bolt://host:port` (plaintext) or `bolt+s://host:port` (verified TLS); omitted port is 7687 |
 | Authentication | Required username and password; no credentials in the URI |
 | Database | Empty/omitted database delegates selection to the server’s configured default |
 | Named database | Supply an existing database name explicitly, for example `app` |
 | Timeout | Default examples use 30 seconds; see the language-specific units above |
 | Result handling | Records are buffered in memory until the query completes |
+| Trusted certificates | Optional path to a PEM file with one or more certificates; replaces the platform trust store for `bolt+s://` |
 
-Python, Node, Go, Java and C# support verified `bolt+s://` using their system TLS facilities. This driver validates certificate trust and hostname; use a TLS terminator when the database listener is plaintext.
+### TLS
+
+Galactus serves TLS itself when it is started with `GDB_TLS_CERT` and
+`GDB_TLS_KEY`, on the same port as plaintext. Connect with `bolt+s://`. The
+driver uses `node:tls`, checks the certificate chain and checks that the
+certificate matches the host name in the URI.
+
+Certificates from a public CA verify against the platform trust store with no
+extra settings. For a private CA or a self-signed development server, pass the
+CA certificate file:
+
+```js
+const driver = await Driver.connect('bolt+s://db.internal:7687', {
+  username: 'gdb',
+  password: process.env.GDB_PASSWORD,
+  trustedCertificates: '/etc/galactus/ca.pem',
+});
+```
+
+`trustedCertificates` on a `bolt://` URI is a configuration error, and the
+driver never falls back from `bolt+s://` to plaintext. Verification is always
+on; there is no setting that skips it. `bolt+ssc://` and routing URIs
+(`neo4j://`, `neo4j+s://`) are rejected.
+
+### Connection details
+
+After connecting, the driver reports what it agreed with the server:
+
+```js
+console.log(driver.protocolVersion); // "5.4", or "4.4" on a server capped at 4.4
+console.log(driver.serverAgent);     // the server's agent string
+console.log(driver.connectionId);    // the server's id for this connection
+console.log(driver.lastBookmark);    // latest bookmark from an autocommit query or commit, or null
+```
+
+On Bolt 5.1 and newer the driver identifies itself with a `bolt_agent`
+(`galactus-db-node-driver/0.2.0` on `Node/<version>`) and authenticates in a
+separate LOGON step. Credentials and query parameters are never logged.
 
 Timeouts bound socket waits, not necessarily total query duration or DNS lookup;
 Go uses a deadline for the complete operation. The asynchronous API rejects overlapping operations on one driver. Use another connection for concurrent work. This package uses Node sockets and does not run in a browser.
@@ -149,28 +188,62 @@ driver and finish the transaction before reusing it for unrelated work. Closing
 or disposing a connection rolls back an unfinished transaction; it never
 implicitly commits. The read-only argument requests a read transaction.
 
-If a query or transport failure occurs, the driver discards the connection.
-Do not issue rollback on a connection already discarded after failure. A lost
-connection during COMMIT can mean the commit outcome is unknown; reconcile the
-result before retrying a write.
+If the database rejects a statement inside a transaction, the driver resets the
+connection and the server rolls the transaction back. `driver.transaction` is
+then `false`, so there is nothing left to roll back, and the next query runs as
+an autocommit query on the same driver.
+
+A transport failure discards the connection. A lost connection during COMMIT
+means the commit outcome is unknown; reconcile the result before retrying a
+write. A database error answering COMMIT means the transaction did not commit.
 
 ## Native type mapping
 
-Native `bigint` for integers; `number` for floating point; `boolean`, `string`, `Buffer`/`Uint8Array`, arrays, and string-keyed objects. Native `Date` inputs work; returned datetimes retain nanoseconds in named wrappers. TypeScript declarations are included with the package.
+Native `bigint` for integers; `number` for floating point; `boolean`, `string`, `Buffer`/`Uint8Array`, arrays, and string-keyed objects. Native `Date` inputs work; returned datetimes retain nanoseconds in named wrappers. `DECIMAL` values arrive as strings with their exact digits. TypeScript declarations are included with the package.
 
 - Database integers are signed 64-bit; out-of-range integer inputs fail.
 - Bytes stay binary; values do not pass through JSON.
 - Temporal wrappers preserve nanoseconds, offsets and named zones when the
   runtime’s native types cannot represent the full value.
 - Calendar duration keeps months, days, seconds and nanoseconds separately.
-- Graph nodes, relationships and paths have named result types. Bind their IDs
-  or properties as parameters; the graph entities themselves are result-only.
+- Graph nodes, relationships and paths have named result types. Each node and
+  relationship has an `elementId` string, and a relationship also has
+  `startElementId` and `endElementId`. They match Cypher's `elementId()`, which in
+  Galactus is the decimal text of the integer id, on Bolt 5.4 and Bolt 4.4 alike.
+  Bind IDs or properties as parameters; the graph entities themselves are
+  result-only.
 - Unknown wire structures remain explicit structures and cannot be used as
   generic application-object serialization.
 
 No ORM or automatic arbitrary-object mapping is included. Convert application
-models, UUIDs and decimal values explicitly to your chosen supported format.
+models and UUIDs explicitly to your chosen supported format.
 See the [complete type mapping](docs/BLUEPRINT.md) for precision and range details.
+
+### Decimals
+
+JavaScript has no standard decimal type, so exact decimals travel as strings in
+both directions. Send the digits as a string and turn them into a `DECIMAL` in
+Cypher:
+
+```js
+const { records } = await driver.executeQuery(
+  'RETURN decimal($price) AS price', { price: '12.30' });
+console.log(records[0].price); // "12.30"
+```
+
+### Datetimes
+
+`DateTime` holds an offset datetime with nanoseconds. Its `seconds` are local
+epoch seconds, as in 0.1, and `utcSeconds` gives the UTC instant. Build one from
+a UTC instant with `DateTime.fromUtc(utcSeconds, nanoseconds, offsetSeconds)`.
+The driver writes it in the form the agreed protocol expects, so the same value
+works on Bolt 5.4 and 4.4.
+
+`ZonedDateTime` keeps an IANA zone name and records whether its seconds are
+local or UTC (`basis`). Create one with `ZonedDateTime.local(...)` or
+`ZonedDateTime.utc(...)`; the server accepts both. A Bolt 5 server returns
+UTC-based values and a Bolt 4.4 server local-based ones. Two values are equal
+only when basis, seconds, nanoseconds and zone all match.
 
 Use `37n` for an INTEGER and `37` for a FLOAT. Large integers should be constructed from bigint literals or decimal strings, not already-rounded numbers. `JSON.stringify` needs an explicit bigint conversion policy. Decoded maps have no prototype; use `Object.keys` and `Object.hasOwn`.
 
@@ -212,17 +285,46 @@ solids are outside the current database scope. See the [spatial guide](docs/SPAT
 
 ## Errors and connection lifecycle
 
-Server errors expose `DatabaseError.code`, `.metadata`, and `.message`. Distinguish these from protocol, connection,
-timeout, and unsupported-value errors in your application.
+Server errors are `DatabaseError` instances with the server's `code`, `message`
+and `metadata`, plus the parts of the code: `classification` (`ClientError`,
+`TransientError` or `DatabaseError`), `category` and `title`. The flags
+`isClientError`, `isTransient`, `isDatabaseError` and `isRetryable` save string
+parsing. `isRetryable` is true for transient errors only; the driver never
+retries by itself.
+
+Compare codes against the frozen `ErrorCodes` object:
+
+```js
+import { DatabaseError, ErrorCodes } from 'galactus-db-node-driver';
+
+try {
+  await driver.executeQuery('CREATE (:Account {email:$email})', { email });
+} catch (e) {
+  if (e instanceof DatabaseError && e.code === ErrorCodes.ConstraintValidationFailed) {
+    // the email is already registered
+  } else {
+    throw e;
+  }
+}
+// The same driver is ready for the next query.
+```
+
+After a database error the driver resets the connection and stays usable.
+Protocol, connection, TLS and authentication failures, timeouts and
+unsupported-value errors are ordinary `Error`s; after a connection, TLS,
+protocol or authentication failure the driver is closed. A parameter the driver
+cannot encode is rejected before anything is sent, and the connection stays
+open.
 
 | Symptom | Check |
 |---|---|
 | Connection refused | Host, port, listener and network reachability |
 | Authentication rejected | Database username and configured password |
 | Database not found | Explicit database name; omit it to use the server default |
-| TLS negotiation fails | TLS terminator, trust chain and certificate hostname |
+| TLS negotiation fails | Server started with `GDB_TLS_CERT`/`GDB_TLS_KEY`, `trustedCertificates` for a private CA, and a certificate that names the URI host |
+| Plaintext connection closed by a TLS server | Use `bolt+s://`; a server with a certificate requires TLS |
 | Unsupported parameter | Convert the object to a supported scalar/container or named value |
-| Driver is closed after an error | Open a new connection; failed connections are discarded |
+| Driver is closed after an error | A connection, TLS or protocol failure closed it; open a new driver |
 
 Credentials and parameters are not logged by the driver. Avoid writing them to
 application logs when reporting errors. The driver performs no automatic write
@@ -236,29 +338,35 @@ Run from the repository root:
 node --test test.mjs
 ```
 
-Fixtures and tests are self-contained. Without `GDB_TEST_URI`, live database
-tests are skipped. For integration tests, use a fresh disposable server and
-set `GDB_TEST_URI` and `GDB_TEST_PASSWORD`; tests create data and exercise
+Fixtures and tests are self-contained. The codec tests check every golden value
+in Bolt 4.4 form, the Bolt 5 forms with element ids and UTC datetimes, and that
+both datetime forms decode to the same value. Without `GDB_TEST_URI`, live
+database tests are skipped. For integration tests, use a fresh disposable server
+and set `GDB_TEST_URI` and `GDB_TEST_PASSWORD` (plus `GDB_TEST_EXPECT_BOLT` and,
+for `bolt+s://`, `GDB_TEST_CA_FILE`); tests create data and exercise
 transactions. The configured default database is used. Reset the disposable
 database before repeating the suite.
 
 See [test instructions](tests/README.md) for platform prerequisites and environment
-examples. The shared live suite covers 57 spatial cases per language, integer
-boundaries, native values, large chunked payloads, transactions and failures.
+examples. The shared live suite runs on Bolt 5.4, on Bolt 4.4 and over TLS. It
+covers 57 spatial cases per language, integer boundaries, native values, large
+chunked payloads, element ids, datetimes, decimals, transactions, recovery after
+database errors, constraint errors and certificate checks.
 
 ## Current scope
 
-This release provides direct connections, basic authentication, parameterised
-queries, eager records and summaries, explicit transactions, native type mapping,
-and full supported spatial interchange. It does not yet provide pooling,
-routing discovery, managed retry callbacks, lazy cursors, cancellation, an ORM,
-or asynchronous APIs outside Node. Messages are capped at 64 MiB and nesting at
-64 levels; aggregate result memory can exceed a single message.
+This release provides direct connections over Bolt 5.4 or 4.4, verified TLS,
+basic authentication, parameterised queries, eager records and summaries,
+explicit transactions, recovery after database errors, classified errors,
+native type mapping, and full supported spatial interchange. Each driver owns
+one connection; open one driver per concurrent unit of work. Messages are
+capped at 64 MiB and nesting at 64 levels; aggregate result memory can exceed a
+single message.
 
-Windows builds and real-server interoperability have been tested. Broader
-platform validation, TLS interoperability and production load testing remain
-release work. See [the shared blueprint](docs/BLUEPRINT.md) and
-[implementation overview](docs/OVERVIEW.md) for the precise contract.
+Real-server interoperability has been tested on Windows over plaintext Bolt
+5.4, Bolt 4.4 and TLS. See [the shared blueprint](docs/BLUEPRINT.md) and the
+[implementation overview](docs/OVERVIEW.md) for the precise contract, including
+pooling, routing and the other follow-on work.
 
 ## Feedback and contribution
 
