@@ -1,23 +1,32 @@
 {
   "name": "galactus-db-node-driver",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Dependency-free native Bolt 5.4 and 4.4 driver for Galactus DB",
   "type": "module",
   "exports": {
-    "types": "./index.d.ts",
-    "import": "./index.js",
-    "default": "./index.js"
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./mapper": {
+      "types": "./mapper.d.ts",
+      "import": "./mapper.js",
+      "default": "./mapper.js"
+    }
   },
   "types": "./index.d.ts",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test.mjs"
+    "test": "node --test test.mjs mapper.test.mjs"
   },
   "files": [
     "index.js",
     "index.d.ts",
+    "mapper.d.ts",
+    "mapper.js",
     "README.md",
     "CHANGELOG.md",
     "docs"

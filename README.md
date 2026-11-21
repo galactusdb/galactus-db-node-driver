@@ -7,7 +7,7 @@ native values, and explicit transactions. The driver speaks Bolt 5.4 directly,
 falls back to Bolt 4.4 when the server asks for it, connects over the server's
 own TLS listener, and has **zero third-party runtime package dependencies**.
 
-**Status: 0.2 / early access.** Source is available on `main`. This is a tested
+**Status: 0.3 / early access.** Source is available on `main`. This is a tested
 baseline with one connection per driver and eager results. Install from source
 as shown below and read the [current scope](#current-scope) to see how it fits
 your application.
@@ -19,6 +19,7 @@ your application.
 - [Queries and results](#queries-and-results)
 - [Transactions](#transactions)
 - [Native type mapping](#native-type-mapping)
+- [Object mapping](#object-mapping)
 - [Spatial values](#spatial-values)
 - [Errors and connection lifecycle](#errors-and-connection-lifecycle)
 - [Testing](#testing)
@@ -140,7 +141,7 @@ console.log(driver.lastBookmark);    // latest bookmark from an autocommit query
 ```
 
 On Bolt 5.1 and newer the driver identifies itself with a `bolt_agent`
-(`galactus-db-node-driver/0.2.0` on `Node/<version>`) and authenticates in a
+(`galactus-db-node-driver/0.3.0` on `Node/<version>`) and authenticates in a
 separate LOGON step. Credentials and query parameters are never logged.
 
 Timeouts bound socket waits, not necessarily total query duration or DNS lookup;
@@ -215,7 +216,7 @@ Native `bigint` for integers; `number` for floating point; `boolean`, `string`, 
 - Unknown wire structures remain explicit structures and cannot be used as
   generic application-object serialization.
 
-No ORM or automatic arbitrary-object mapping is included. Convert application
+The optional [mapper](#object-mapping) converts your own types to and from nodes. Convert application
 models and UUIDs explicitly to your chosen supported format.
 See the [complete type mapping](docs/BLUEPRINT.md) for precision and range details.
 
@@ -246,6 +247,40 @@ UTC-based values and a Bolt 4.4 server local-based ones. Two values are equal
 only when basis, seconds, nanoseconds and zone all match.
 
 Use `37n` for an INTEGER and `37` for a FLOAT. Large integers should be constructed from bigint literals or decimal strings, not already-rounded numbers. `JSON.stringify` needs an explicit bigint conversion policy. Decoded maps have no prototype; use `Object.keys` and `Object.hasOwn`.
+
+## Object mapping
+
+The driver includes an optional mapper: declare a type as a node or a relationship, and it
+converts objects to and from the graph and writes the Cypher for the everyday operations.
+It adds no dependency. [docs/MAPPER.md](docs/MAPPER.md) is the full contract, shared by every
+Galactus driver.
+
+```js
+import {Mapper, defineNode, defineRelationship} from 'galactus-db-node-driver/mapper';
+
+class Person {}
+defineNode(Person, {key: 'id', properties: {id: 'id', name: 'name', email: 'email_address'}});
+class Company {}
+defineNode(Company, {key: 'name', properties: ['name']});
+class WorksAt {}
+defineRelationship(WorksAt, {type: 'WORKS_AT', properties: ['since']});
+
+const mapper = new Mapper(driver);
+const ann = await mapper.save(Object.assign(new Person(), {id: 1n, name: 'Ann', email: 'ann@example.com'}));
+const acme = await mapper.save(Object.assign(new Company(), {name: 'Acme'}));
+await mapper.relate(ann, Object.assign(new WorksAt(), {since: 2024n}), acme);
+
+await mapper.find(Person, 1n);                    // a Person or null
+await mapper.findAll(Person, {name: 'Ann'}, 10);
+await mapper.related(ann, WorksAt, Company);      // [[WorksAt, Company], ...]
+await mapper.query(Person, 'MATCH (p:Person) WHERE p.name STARTS WITH $s RETURN p', {s: 'A'});
+await mapper.delete(Person, 1n);                  // true when a node was deleted
+```
+
+A mapped object is made without calling the class's constructor. Integers are `bigint`, as everywhere in the driver.
+`query` maps what a statement of your own returns, so the mapper never stands between you
+and Cypher. Every operation is one statement and joins the driver's open transaction when
+there is one.
 
 ## Spatial values
 
@@ -358,7 +393,7 @@ database errors, constraint errors and certificate checks.
 This release provides direct connections over Bolt 5.4 or 4.4, verified TLS,
 basic authentication, parameterised queries, eager records and summaries,
 explicit transactions, recovery after database errors, classified errors,
-native type mapping, and full supported spatial interchange. Each driver owns
+native type mapping, an object mapper and full supported spatial interchange. Each driver owns
 one connection; open one driver per concurrent unit of work. Messages are
 capped at 64 MiB and nesting at 64 levels; aggregate result memory can exceed a
 single message.

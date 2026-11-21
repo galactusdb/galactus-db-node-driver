@@ -400,7 +400,7 @@ function validateParameters(v, depth = 0) {
       validateParameters(f, depth + 1);
   }
 }
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 const USER_AGENT = `galactus-db-node-driver/${VERSION}`;
 
 // Published server codes. Codes the server adds later still arrive as plain
@@ -421,10 +421,10 @@ export const ErrorCodes = Object.freeze({
   TransactionTerminated : 'Galactus.ClientError.Transaction.Terminated',
   SnapshotTooOld : 'Galactus.TransientError.Transaction.SnapshotTooOld',
   Forbidden : 'Galactus.ClientError.Security.Forbidden',
-  SyntaxError : 'Neo.ClientError.Statement.SyntaxError',
-  SemanticError : 'Neo.ClientError.Statement.SemanticError',
-  Unauthorized : 'Neo.ClientError.Security.Unauthorized',
-  DatabaseNotFound : 'Neo.ClientError.Database.DatabaseNotFound',
+  SyntaxError : 'Galactus.ClientError.Statement.SyntaxError',
+  SemanticError : 'Galactus.ClientError.Statement.SemanticError',
+  Unauthorized : 'Galactus.ClientError.Security.Unauthorized',
+  DatabaseNotFound : 'Galactus.ClientError.Database.DatabaseNotFound',
 });
 
 export class DatabaseError extends Error {
