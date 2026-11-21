@@ -1,6 +1,6 @@
 {
   "name": "galactus-db-node-driver",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Dependency-free native Bolt 5.4 and 4.4 driver for Galactus DB",
   "type": "module",
   "exports": {

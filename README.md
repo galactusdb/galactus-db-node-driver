@@ -7,7 +7,7 @@ native values, and explicit transactions. The driver speaks Bolt 5.4 directly,
 falls back to Bolt 4.4 when the server asks for it, connects over the server's
 own TLS listener, and has **zero third-party runtime package dependencies**.
 
-**Status: 0.2 / early access.** Source is available on `main`. This is a tested
+**Status: 0.3 / early access.** Source is available on `main`. This is a tested
 baseline with one connection per driver and eager results. Install from source
 as shown below and read the [current scope](#current-scope) to see how it fits
 your application.
@@ -141,7 +141,7 @@ console.log(driver.lastBookmark);    // latest bookmark from an autocommit query
 ```
 
 On Bolt 5.1 and newer the driver identifies itself with a `bolt_agent`
-(`galactus-db-node-driver/0.2.0` on `Node/<version>`) and authenticates in a
+(`galactus-db-node-driver/0.3.0` on `Node/<version>`) and authenticates in a
 separate LOGON step. Credentials and query parameters are never logged.
 
 Timeouts bound socket waits, not necessarily total query duration or DNS lookup;
@@ -393,7 +393,7 @@ database errors, constraint errors and certificate checks.
 This release provides direct connections over Bolt 5.4 or 4.4, verified TLS,
 basic authentication, parameterised queries, eager records and summaries,
 explicit transactions, recovery after database errors, classified errors,
-native type mapping, and full supported spatial interchange. Each driver owns
+native type mapping, an object mapper and full supported spatial interchange. Each driver owns
 one connection; open one driver per concurrent unit of work. Messages are
 capped at 64 MiB and nesting at 64 levels; aggregate result memory can exceed a
 single message.

@@ -400,7 +400,7 @@ function validateParameters(v, depth = 0) {
       validateParameters(f, depth + 1);
   }
 }
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 const USER_AGENT = `galactus-db-node-driver/${VERSION}`;
 
 // Published server codes. Codes the server adds later still arrive as plain

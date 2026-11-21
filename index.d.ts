@@ -28,7 +28,7 @@ export class DatabaseError extends Error {
  readonly classification:string|null; readonly category:string|null; readonly title:string|null;
  readonly isClientError:boolean; readonly isTransient:boolean; readonly isDatabaseError:boolean; readonly isRetryable:boolean;
 }
-export const VERSION:'0.2.0';
+export const VERSION:'0.3.0';
 export const ErrorCodes: Readonly<{
  ConstraintValidationFailed:'Galactus.ClientError.Schema.ConstraintValidationFailed';
  TypeError:'Galactus.ClientError.Statement.TypeError';
